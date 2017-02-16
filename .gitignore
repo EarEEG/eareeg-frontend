@@ -1,0 +1,7 @@
+assets/js/vendor/
+node_modules/
+runserver.sh
+static/
+doc/
+earEEG/local_settings.py
+*.pyc

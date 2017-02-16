@@ -1,0 +1,19 @@
+{
+  "description": "A Django-based web application for visualizing brain waves",
+  "dependencies": {
+    "bower": "1.7.9",
+    "grunt": "1.0.1",
+    "grunt-contrib-requirejs": "1.0.0",
+    "grunt-contrib-watch": "1.0.0",
+    "grunt-jsdoc": "2.1.0"
+  },
+  "devDependencies": {
+    "jshint": "2.9.2"
+  },
+  "name": "earEEG",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jherwig1/EarEEG"
+  },
+  "version": "0.0.0"
+}

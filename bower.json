@@ -1,0 +1,9 @@
+{
+	"dependencies": {
+		"almond": "0.3.2",
+		"jquery": "2.2.4"
+	},
+
+	"description": "A Django-based web application for visualizing brain waves",
+	"name": "earEEG"
+}
