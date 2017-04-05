@@ -20,8 +20,25 @@ def fetch(ws):
 
 	while connection:
 		message = ws.receive()
+		rv = {}
 		if message is not None:
-			ws.send("{}")
+			query = json.loads(message)
+			run_id = str(query['id'])
+			device_id = str(query['device'])
+			time = str(query['time'])
+			path = data_dir
+			run_path = os.path.join(path, run_id)
+			device_path = os.path.join(run_path, device_id)
+			data_path = os.path.join(device_path, time + ".json")
+
+			try:
+				with open(data_path, "r") as f:
+					data = json.load(f)
+					rv['data'] = data
+			except:
+				rv['error'] = 'Data not found'
+
+			ws.send(json.dumps(rv))
 
 
 @app.get('/ws/load', apply=[websocket])

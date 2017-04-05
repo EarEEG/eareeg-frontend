@@ -1,18 +1,10 @@
 <html>
-<script type="text/javascript">
-	var address = "ws://cepsltb7.curent.utk.edu:9121/ws/load";
-	var socket = new WebSocket(address);
-	socket.onopen = function(event) {
-		console.log("socket opened");
-		msg = {
-			'id': 3
-		};
-		socket.send(JSON.stringify(msg));
-	};
-	socket.onmessage = function(event) {
-		console.log(event);
-	};
+<script type="text/javascript" src="https://cdnjs.cloudflare.com/ajax/libs/d3/4.7.4/d3.js"></script>
+<script type="text/javascript" src="https://code.jquery.com/jquery-3.2.1.min.js"></script>
+<script type="text/javascript" src="./assets/js/main.js">
 </script>
 <body>
+<div id="div1" style="position: absolute; height:100%; width: 100%; background-color: white"></div>
+<div id="div2" style="position: absolute; height:100%; width: 50%; right: 0%; background-color: blue; display:none"></div>
 </body>
 </html>
