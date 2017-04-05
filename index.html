@@ -1,0 +1,18 @@
+<html>
+<script type="text/javascript">
+	var address = "ws://cepsltb7.curent.utk.edu:9121/ws/load";
+	var socket = new WebSocket(address);
+	socket.onopen = function(event) {
+		console.log("socket opened");
+		msg = {
+			'id': 3
+		};
+		socket.send(JSON.stringify(msg));
+	};
+	socket.onmessage = function(event) {
+		console.log(event);
+	};
+</script>
+<body>
+</body>
+</html>
