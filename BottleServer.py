@@ -32,8 +32,15 @@ def fetch(ws):
 			data_path = os.path.join(device_path, time + ".json")
 
 			try:
-				with open(data_path, "r") as f:
-					data = json.load(f)
+				with open("test_data.txt", "r") as f:
+					data = []
+					for line in f:
+						print "in line"
+						fields = line.strip().split()
+						if fields[0] == "poorSignal":
+							print "line is poorSignal"
+							data.append({})
+						data[len(data) - 1][fields[0]] = fields[1]
 					rv['data'] = data
 			except:
 				rv['error'] = 'Data not found'
