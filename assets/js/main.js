@@ -12,53 +12,98 @@ function Control(div) {
 }
 
 Control.prototype = {
-	initialize: function(id) {
+	remove_chart: function(name) {
+		var chart = this.charts[name];
+		if (chart === undefined)
+			return;
+
+		delete this.charts[name];
+		chart.destroy();
+		$('#' + this.div + '> #controls > select').append("<option value='" + name + "'>" + name + "</option>");
+	},
+
+	add_chart: function(name) {
+		var self = this;
+		var div = document.createElement('div');
+		div.id = name;
+		$('#' + self.div).append(div);
+		$('#' + self.div + '> #' + name).addClass('chart');
+
+		self.charts[name] = new Highcharts.chart({
+				chart: {
+					type: 'spline',
+					marginLeft: 40,
+					spacingTop: 20,
+					spacingBottom: 20,
+					renderTo: div
+				},
+				title: {
+					text: name,
+					align: 'left',
+					margin: 0,
+					x: 30
+				},
+				credits: {
+					enabled: false
+				},
+				xAxis: {
+					crosshair: true,
+					labels: {
+						format: '{value} sec'
+					}
+				},
+				yAxis: {
+
+				},
+				series: [{
+					data: [],
+					name: name,
+					fillOpacity: 0.3,
+				}],
+
+				exporting: {
+					buttons: {
+						removeButton: {
+							text: "Remove",
+							onclick: function() {
+								var name = this.userOptions.title.text;
+								self.remove_chart(name);
+							},
+							symbolFill: '#FF0000'
+						}
+					}
+				}
+			});
+	},
+
+	initialize: function(id, config) {
 		var self = this;
 		this.id = id;
-		this.categories = [ 'delta', 'theta', 'lowAlpha'];
-//, 'theta', 'lowAlpha', 'highAlpha', 'lowBeta' ];
+		this.device = config.id;
+		this.categories = []; //[ 'delta', 'theta', 'lowAlpha'];
+		this.types = []; //['highAlpha', 'lowBeta' ];
 
+		self.setupHandlers();
 		this.charts = {};
-		this.categories.forEach(function(name) {
-			var div = document.createElement('div');
-			div.id = name;
-			$('#' + self.div).append(div);
-			//$('#' + name).addClass('chart');
 
-			self.charts[name] = new Highcharts.chart({
-					chart: {
-						type: 'spline',
-						marginLeft: 40,
-						spacingTop: 20,
-						spacingBottom: 20,
-						renderTo: div
-					},
-					title: {
-						text: name,
-						align: 'left',
-						margin: 0,
-						x: 30
-					},
-					credits: {
-						enabled: false
-					},
-					xAxis: {
-						crosshair: true,
-						labels: {
-							format: '{value} sec'
-						}
-					},
-					yAxis: {
+		/* TODO Fix this later. */
+		for (i = 0; i < 3; i++) {
+			self.categories.push(config.waveTypes[i]);
+		}
 
-					},
-					series: [{
-						data: [],
-						name: name,
-						fillOpacity: 0.3,
-					}]
-				});
+		for (i = 3; i < config.waveTypes.length; i++) {
+			self.types.push(config.waveTypes[i]);
+		}
+
+		self.categories.forEach(function(name) {
+			self.add_chart(name);
 		});
-		this.fetch_data();
+
+		self.types.forEach(function(type) {
+			$('#' + self.div + ' > #controls > select').append('<option value=' + type + '>' + type + '</>');
+		});
+
+		self.fetch_data();
 	},
 
 
@@ -70,8 +115,8 @@ Control.prototype = {
 
 		var msg = {
 			'time': 3.0,
-			'id': 'test',
-			'device': "device1"
+			'id': this.id,
+			'device': this.device
 		};
 
 		this.data_socket.send(JSON.stringify(msg));
@@ -87,7 +132,7 @@ Control.prototype = {
 			console.log('recieved message');
 			msg = JSON.parse(event.data);
 			if (msg.error) {
-				consle.error(msg.error);
+				console.error(msg.error);
 				return;
 			}
 			this.handle_data(msg.data);
@@ -130,7 +175,6 @@ Control.prototype = {
 
 		setTimeout(function() {
 			self.play(self.frames[self.index]);
-			console.log(self.frames.length);
 			self.index += 1;
 			if (!self.fetchingFrames && self.index >= (self.frames.length / 3)) {
 				console.log('fetching');
@@ -147,9 +191,21 @@ Control.prototype = {
 		for (var key in frame) {
 			if (this.charts[key] === undefined)
 				continue;
-			this.charts[key].series[0].addPoint(frame[key] / 1000.0);
+			this.charts[key].series[0].addPoint([this.time, frame[key] / 1000.0]);
 		}
+	},
 
+	setupHandlers: function() {
+		var self = this;
+		$('#' + self.div +'> #controls > select').on('change', function() {
+			if ($(this).val() === "")
+				return;
+			self.add_chart($(this).val());
+			$("#" + self.div + " > #controls > select > option[value='" + $(this).val() + "']").remove();
+			$('html, body').animate({
+				scrollTop: $(document).height()
+			}, 1000);
+		});
 	}
 };
 
@@ -166,35 +222,71 @@ function getURLVariables() {
 }
 
 function resizeDivs() {
-	$('#div1').css('width', '50%');
+	$('#div1').css('width', '49%');
 	$('#div2').css('display', '');
+}
+
+function startRun() {
+	var address = 'ws://cepsltb7.curent.utk.edu:9121/ws/run';
+	data_socket = new WebSocket(address);
+	data_socket.onopen = function(event) {
+		console.log("run socket is open");
+		data_socket.send(JSON.stringify({msg: 'hi'}));
+	};
+	data_socket.onmessage = function(event) {
+		console.log('recieved message');
+		msg = JSON.parse(event.data);
+		if (msg.error) {
+			consle.error(msg.error);
+			return;
+		}
+	};
+}
+
+function init(id) {
+		if (id === undefined)
+			return;
+
+		configSocket = new WebSocket('ws://cepsltb7.curent.utk.edu:9121/ws/init');
+
+		configSocket.onopen = function(event) {
+			setTimeout(function() {
+				configSocket.send(JSON.stringify({
+					'run': id
+				}));
+			}, 50);
+		};
+
+		configSocket.onmessage = function(event) {
+			var msg = JSON.parse(event.data);
+			var i;
+			if (msg.error) {
+				console.error(msg.error);
+				return;
+			}
+
+			if (msg.config.devices.length === 1) {
+				window.control1 = new Control('div1');
+				window.control1.initialize(id, msg.config.devices[0]);
+			} else {
+				resizeDivs();
+				window.control1 = new Control('div1');
+				window.control1.initialize(id, msg.config.devices[0]);
+				window.control2 = new Control('div2');
+				window.control2.initialize(id, msg.config.devices[1]);
+			}
+		};
 }
 
 $(document).ready(function() {
 	var config;
 	var num = 1;
+	var id;
+
 	try {
 		var options = getURLVariables();
-		num = options.num.split('/')[0];
-	} catch(e) {
-		num = 1;
-	}
+		id = options.run.split('/')[0];
+	} catch(e) { }
 
-	if (num > 2 || num <= 0)
-		num = 2;
-
-	if (config === "")
-		console.log("Nothing");
-	else {
-		if (num == 1) {
-			window.control1 = new Control('div1');
-			window.control1.initialize(config);
-		} else {
-			resizeDivs();
-			window.control1 = new Control('div1');
-			window.control2 = new Control('div2');
-			window.control1.initialize(config);
-			window.control2.initialize(config);
-		}
-	}
+	init(id);
 });

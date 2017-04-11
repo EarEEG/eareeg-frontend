@@ -1,0 +1,17 @@
+{
+	"devices": [
+		{
+			"id": "device1",
+			"waveTypes": [
+				"delta",
+				"theta",
+				"lowAlpha",
+				"highAlpha",
+				"lowBeta",
+				"midGamma",
+				"attention",
+				"meditation"
+			]
+		}
+	]
+}
