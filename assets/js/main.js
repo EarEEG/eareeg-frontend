@@ -1,7 +1,8 @@
 function Control(div) {
 	this.id = undefined;
 	this.div = div;
-	this.frames = [];
+	this.frames = {};
+	this.devices = [];
 	this.time = undefined;
 	this.startTime = 0;
 	this.fps = 3.0;
@@ -22,7 +23,7 @@ Control.prototype = {
 		$('#' + this.div + '> #controls > select').append("<option value='" + name + "'>" + name + "</option>");
 	},
 
-	add_chart: function(name) {
+	add_chart: function(name, num) {
 		var self = this;
 		var div = document.createElement('div');
 		div.id = name;
@@ -59,7 +60,13 @@ Control.prototype = {
 					data: [],
 					name: name,
 					fillOpacity: 0.3,
-				}],
+				},
+				{
+					data: [],
+					name: name,
+					fillOpacity: 0.3,
+				}
+				],
 
 				exporting: {
 					buttons: {
@@ -76,10 +83,20 @@ Control.prototype = {
 			});
 	},
 
-	initialize: function(id, config) {
+	initialize: function(id, config, config2) {
 		var self = this;
 		this.id = id;
 		this.device = config.id;
+		this.devices.push(this.device);
+		self.frames[config.id] = [];
+		if (config2 !== undefined) {
+			this.device2 = config2.id;
+			this.devices.push(this.device2);
+		self.frames[config2.id] = [];
+		}
+
+
+
 		this.categories = []; //[ 'delta', 'theta', 'lowAlpha'];
 		this.types = []; //['highAlpha', 'lowBeta' ];
 
@@ -96,7 +113,7 @@ Control.prototype = {
 		}
 
 		self.categories.forEach(function(name) {
-			self.add_chart(name);
+			self.add_chart(name, 2);
 		});
 
 		self.types.forEach(function(type) {
@@ -116,8 +133,13 @@ Control.prototype = {
 		var msg = {
 			'time': 3.0,
 			'id': this.id,
-			'device': this.device
+			'devices': []
 		};
+
+		this.devices.forEach(function(d) {
+			console.log(d);
+			msg.devices.push(d);
+		});
 
 		this.data_socket.send(JSON.stringify(msg));
 	},
@@ -135,19 +157,21 @@ Control.prototype = {
 				console.error(msg.error);
 				return;
 			}
-			this.handle_data(msg.data);
+			this.handle_data(msg);
 		}.bind(this);
 	},
 
 	handle_data: function(data) {
 		var self = this;
 		this.fetchingFrames = false;
-		data.forEach(function(frame, i) {
-			if (self.frames.length === 0)
-				frame.time = 0;
-			else
-				frame.time = self.frames[self.frames.length - 1].time + self.timestep;
-			self.frames.push(frame);
+		Object.keys(data.devices).forEach(function(key) {
+			data.devices[key].forEach(function(frame, i) {
+				if (self.frames[key].length === 0)
+					frame.time = 0;
+				else
+					frame.time = self.frames[key][self.frames[key].length - 1].time + self.timestep;
+				self.frames[key].push(frame);
+			});
 		});
 
 		if (!this.playing) {
@@ -174,24 +198,27 @@ Control.prototype = {
 		}
 
 		setTimeout(function() {
-			self.play(self.frames[self.index]);
+			self.devices.forEach(function(device, i) {
+				self.play(self.frames[device][self.index], i);
+			});
+
 			self.index += 1;
 			if (!self.fetchingFrames && self.index >= (self.frames.length / 3)) {
 				console.log('fetching');
 				self.fetchingFrames = true;
-				self.fetch_data(self.frames[self.frames.length -1].time + self.timestep);
+				//self.fetch_data(self.frames[self.frames.length -1].time + self.timestep);
 			}
 
 			self.simple_loop();
 		}, 1000.0 / this.fps);
 	},
 
-	play: function(frame) {
+	play: function(frame, id) {
 		this.time = frame.time;
 		for (var key in frame) {
 			if (this.charts[key] === undefined)
 				continue;
-			this.charts[key].series[0].addPoint([this.time, frame[key] / 1000.0]);
+			this.charts[key].series[id].addPoint([this.time, frame[key] / 1000.0]);
 		}
 	},
 
@@ -269,11 +296,9 @@ function init(id) {
 				window.control1 = new Control('div1');
 				window.control1.initialize(id, msg.config.devices[0]);
 			} else {
-				resizeDivs();
+				console.log("hereee");
 				window.control1 = new Control('div1');
-				window.control1.initialize(id, msg.config.devices[0]);
-				window.control2 = new Control('div2');
-				window.control2.initialize(id, msg.config.devices[1]);
+				window.control1.initialize(id, msg.config.devices[0], msg.config.devices[1]);
 			}
 		};
 }

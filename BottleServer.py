@@ -35,26 +35,29 @@ def fetch(ws):
 	while connection:
 		message = ws.receive()
 		rv = {}
+		rv['devices'] = {}
 		if message is not None:
 			query = json.loads(message)
 			run_id = str(query['id'])
-			device_id = str(query['device'])
-			#time = str(query['time'])
-			data_path = os.path.join('assets', 'data', run_id, device_id + ".txt")
+			devices = query['devices']
+			for device in devices:
+				print device
+				data_path = os.path.join('assets', 'data', run_id, device + ".txt")
+				print data_path
 
-			try:
-				with open(data_path, "r") as f:
-					data = []
-					for line in f:
-						fields = line.strip().split()
-						if fields[0] == "poorSignal":
-							data.append({})
-						data[len(data) - 1][fields[0]] = fields[1]
-					rv['data'] = data
-			except:
-				rv['error'] = 'Data not found'
+				try:
+					with open(data_path, "r") as f:
+						data = []
+						for line in f:
+							fields = line.strip().split()
+							if fields[0] == "poorSignal":
+								data.append({})
+							data[len(data) - 1][fields[0]] = fields[1]
+						rv['devices'][device] = data;
+				except:
+					rv['error'] = 'Data not found'
 
-			ws.send(json.dumps(rv))
+				ws.send(json.dumps(rv))
 
 
 @app.get('/ws/init', apply=[websocket])
