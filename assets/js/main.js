@@ -180,10 +180,17 @@ Control.prototype = {
 				return;
 			}
 
+			console.debug(msg);
 			if (this.replay)
 				this.handle_data(msg);
 			else {
 				console.log("LIVE MODE");
+				msg.data.forEach(function(value) {
+					try {
+						this.charts[value.type].series[0].addPoint(value.value);
+						//this.charts[key].series[id].addPoint([this.time, frame[key] / 1000.0]);
+					} catch (e) {}
+				});
 			}
 		}.bind(this);
 	},
