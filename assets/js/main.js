@@ -1,6 +1,7 @@
-function Control(div) {
+function Control(div, replay) {
 	this.id = undefined;
 	this.div = div;
+	this.replay = replay;
 	this.frames = {};
 	this.devices = [];
 	this.time = undefined;
@@ -13,6 +14,11 @@ function Control(div) {
 }
 
 Control.prototype = {
+	hide_chart: function(name) {
+		$('#' + this.div + '> #' + name).addClass('hidden');
+		$('#' + this.div + '> #controls > select').append("<option value='" + name + "'>" + name + "</option>");
+	},
+
 	remove_chart: function(name) {
 		var chart = this.charts[name];
 		if (chart === undefined)
@@ -29,6 +35,7 @@ Control.prototype = {
 		div.id = name;
 		$('#' + self.div).append(div);
 		$('#' + self.div + '> #' + name).addClass('chart');
+		$('#' + self.div + '> #' + name).addClass('hidden');
 
 		self.charts[name] = new Highcharts.chart({
 				chart: {
@@ -74,28 +81,33 @@ Control.prototype = {
 							text: "Remove",
 							onclick: function() {
 								var name = this.userOptions.title.text;
-								self.remove_chart(name);
+								self.hide_chart(name);
 							},
 							symbolFill: '#FF0000'
 						}
 					}
 				}
 			});
+
+
+		if (self.devices.length == 1) {
+			self.charts[name].series[1].remove();
+		}
 	},
 
 	initialize: function(id, config, config2) {
+		if (!id) id = "run1";
 		var self = this;
 		this.id = id;
 		this.device = config.id;
 		this.devices.push(this.device);
 		self.frames[config.id] = [];
+
 		if (config2 !== undefined) {
 			this.device2 = config2.id;
 			this.devices.push(this.device2);
-		self.frames[config2.id] = [];
+			self.frames[config2.id] = [];
 		}
-
-
 
 		this.categories = []; //[ 'delta', 'theta', 'lowAlpha'];
 		this.types = []; //['highAlpha', 'lowBeta' ];
@@ -104,16 +116,19 @@ Control.prototype = {
 		this.charts = {};
 
 		/* TODO Fix this later. */
-		for (i = 0; i < 3; i++) {
+		for (i = 0; i < config.waveTypes.length; i++) {
 			self.categories.push(config.waveTypes[i]);
-		}
-
-		for (i = 3; i < config.waveTypes.length; i++) {
-			self.types.push(config.waveTypes[i]);
 		}
 
 		self.categories.forEach(function(name) {
 			self.add_chart(name, 2);
+		});
+
+		self.categories.forEach(function(name, i) {
+			if (i < 3)
+				self.show_chart(name);
+			else
+				self.types.push(name);
 		});
 
 		self.types.forEach(function(type) {
@@ -145,11 +160,18 @@ Control.prototype = {
 	},
 
 	open_data_socket: function(time) {
-		var address = 'ws://cepsltb7.curent.utk.edu:9121/ws/fetch';
+		var address;
+		if (this.replay)
+			address = 'ws://cepsltb7.curent.utk.edu:9121/ws/fetch';
+		else
+			address = 'ws://localhost:9000/';
+
 		this.data_socket = new WebSocket(address);
+
 		this.data_socket.onopen = function(event) {
 			this.fetch_data(time);
 		}.bind(this);
+
 		this.data_socket.onmessage = function(event) {
 			console.log('recieved message');
 			msg = JSON.parse(event.data);
@@ -157,19 +179,30 @@ Control.prototype = {
 				console.error(msg.error);
 				return;
 			}
-			this.handle_data(msg);
+
+			if (this.replay)
+				this.handle_data(msg);
+			else {
+				console.log("LIVE MODE");
+			}
 		}.bind(this);
 	},
 
 	handle_data: function(data) {
 		var self = this;
 		this.fetchingFrames = false;
+
 		Object.keys(data.devices).forEach(function(key) {
+			var id = 1;
+			if (key === "device1")
+				id = 0;
+
 			data.devices[key].forEach(function(frame, i) {
 				if (self.frames[key].length === 0)
 					frame.time = 0;
 				else
 					frame.time = self.frames[key][self.frames[key].length - 1].time + self.timestep;
+
 				self.frames[key].push(frame);
 			});
 		});
@@ -218,8 +251,13 @@ Control.prototype = {
 		for (var key in frame) {
 			if (this.charts[key] === undefined)
 				continue;
+			console.debug('adding point');
 			this.charts[key].series[id].addPoint([this.time, frame[key] / 1000.0]);
 		}
+	},
+
+	show_chart: function(wave) {
+		$('#' + this.div + '> #' + wave).removeClass('hidden');
 	},
 
 	setupHandlers: function() {
@@ -227,7 +265,7 @@ Control.prototype = {
 		$('#' + self.div +'> #controls > select').on('change', function() {
 			if ($(this).val() === "")
 				return;
-			self.add_chart($(this).val());
+			self.show_chart($(this).val());
 			$("#" + self.div + " > #controls > select > option[value='" + $(this).val() + "']").remove();
 			$('html, body').animate({
 				scrollTop: $(document).height()
@@ -270,37 +308,66 @@ function startRun() {
 	};
 }
 
-function init(id) {
-		if (id === undefined)
+function loadConfig(id) {
+	configSocket = new WebSocket('ws://cepsltb7.curent.utk.edu:9121/ws/init');
+	configSocket.onopen = function(event) {
+		setTimeout(function() {
+			configSocket.send(JSON.stringify({
+				'run': id
+			}));
+		}, 50);
+	};
+
+	configSocket.onmessage = function(event) {
+		var msg = JSON.parse(event.data);
+		var i;
+		if (msg.error) {
+			console.error(msg.error);
 			return;
+		}
 
-		configSocket = new WebSocket('ws://cepsltb7.curent.utk.edu:9121/ws/init');
+		if (msg.config.devices.length === 1) {
+			window.control1 = new Control('div1', replay=true);
+			window.control1.initialize(id, msg.config.devices[0]);
+		} else {
+			console.log("hereee");
+			window.control1 = new Control('div1', replay=true);
+			window.control1.initialize(id, msg.config.devices[0], msg.config.devices[1]);
+		}
+	};
+}
 
-		configSocket.onopen = function(event) {
-			setTimeout(function() {
-				configSocket.send(JSON.stringify({
-					'run': id
-				}));
-			}, 50);
-		};
+function init(id) {
+	var liveMode = false;
+	if (id === undefined)
+		liveMode = true;
 
-		configSocket.onmessage = function(event) {
-			var msg = JSON.parse(event.data);
-			var i;
-			if (msg.error) {
-				console.error(msg.error);
-				return;
-			}
+	if (!liveMode) {
+		loadConfig(id);
+		return;
+	}
 
-			if (msg.config.devices.length === 1) {
-				window.control1 = new Control('div1');
-				window.control1.initialize(id, msg.config.devices[0]);
-			} else {
-				console.log("hereee");
-				window.control1 = new Control('div1');
-				window.control1.initialize(id, msg.config.devices[0], msg.config.devices[1]);
-			}
-		};
+	var config = {
+		"devices": [
+			{
+				"id": "device1",
+				"waveTypes": [
+					"delta",
+					"theta",
+					"lowAlpha",
+					"highAlpha",
+					"lowBeta",
+					"midGamma",
+					"attention",
+					"meditation"
+				]
+			},
+		]
+	};
+
+	window.control1 = new Control('div1', replay=false);
+	window.control1.initialize(id, config.devices[0]);
+	/* Harcode config for live mode for now */
 }
 
 $(document).ready(function() {
