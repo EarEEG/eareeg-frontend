@@ -1,6 +1,7 @@
 function Control(div, replay) {
 	this.id = undefined;
 	this.div = div;
+	this.num = 0;
 	this.replay = replay;
 	this.frames = {};
 	this.devices = [];
@@ -109,7 +110,7 @@ Control.prototype = {
 			self.frames[config2.id] = [];
 		}
 
-		this.categories = []; //[ 'delta', 'theta', 'lowAlpha'];
+		this.categories = ["attention", "meditation"]; //[ 'delta', 'theta', 'lowAlpha'];
 		this.types = []; //['highAlpha', 'lowBeta' ];
 
 		self.setupHandlers();
@@ -117,6 +118,7 @@ Control.prototype = {
 
 		/* TODO Fix this later. */
 		for (i = 0; i < config.waveTypes.length; i++) {
+			if (config.waveTypes[i] === "attention" || config.waveTypes[i] === "meditation") continue;
 			self.categories.push(config.waveTypes[i]);
 		}
 
@@ -125,7 +127,7 @@ Control.prototype = {
 		});
 
 		self.categories.forEach(function(name, i) {
-			if (i < 3)
+			if (i < 2)
 				self.show_chart(name);
 			else
 				self.types.push(name);
@@ -152,7 +154,6 @@ Control.prototype = {
 		};
 
 		this.devices.forEach(function(d) {
-			console.log(d);
 			msg.devices.push(d);
 		});
 
@@ -173,23 +174,22 @@ Control.prototype = {
 		}.bind(this);
 
 		this.data_socket.onmessage = function(event) {
-			console.log('recieved message');
 			msg = JSON.parse(event.data);
 			if (msg.error) {
 				console.error(msg.error);
 				return;
 			}
 
-			console.debug(msg);
 			if (this.replay)
 				this.handle_data(msg);
 			else {
-				console.log("LIVE MODE");
 				msg.data.forEach(function(value) {
 					try {
-						this.charts[value.type].series[0].addPoint(value.value);
-						//this.charts[key].series[id].addPoint([this.time, frame[key] / 1000.0]);
-					} catch (e) {}
+						var shift = false;
+						if (self.num > 25) shift = true;
+						this.charts[value.type].series[0].addPoint(value.value, true, shift);
+						self.num += 1;
+					} catch (e) { console.error(e);}
 				});
 			}
 		}.bind(this);
@@ -223,7 +223,6 @@ Control.prototype = {
 	simple_loop: function() {
 		var self = this;
 		if (this.paused) {
-			console.log("playback is paused");
 			setTimeout(function() {
 				self.simple_loop();
 			}, 50);
@@ -231,7 +230,6 @@ Control.prototype = {
 		}
 
 		if (this.index >= this.frames.length) {
-			console.log("setting pause = true");
 			this.paused = true;
 			this.simple_loop();
 			return;
@@ -244,7 +242,6 @@ Control.prototype = {
 
 			self.index += 1;
 			if (!self.fetchingFrames && self.index >= (self.frames.length / 3)) {
-				console.log('fetching');
 				self.fetchingFrames = true;
 				//self.fetch_data(self.frames[self.frames.length -1].time + self.timestep);
 			}
@@ -254,12 +251,15 @@ Control.prototype = {
 	},
 
 	play: function(frame, id) {
+		if (!frame) return;
 		this.time = frame.time;
+		this.num += 1;
+		var shift = false;
+		if (this.num > 25) shift = true;
 		for (var key in frame) {
 			if (this.charts[key] === undefined)
 				continue;
-			console.debug('adding point');
-			this.charts[key].series[id].addPoint([this.time, frame[key] / 1000.0]);
+			this.charts[key].series[id].addPoint([this.time, frame[key] / 1000.0], true, shift);
 		}
 	},
 
@@ -302,11 +302,9 @@ function startRun() {
 	var address = 'ws://cepsltb7.curent.utk.edu:9121/ws/run';
 	data_socket = new WebSocket(address);
 	data_socket.onopen = function(event) {
-		console.log("run socket is open");
 		data_socket.send(JSON.stringify({msg: 'hi'}));
 	};
 	data_socket.onmessage = function(event) {
-		console.log('recieved message');
 		msg = JSON.parse(event.data);
 		if (msg.error) {
 			consle.error(msg.error);
@@ -329,7 +327,6 @@ function loadConfig(id) {
 		var msg = JSON.parse(event.data);
 		var i;
 		if (msg.error) {
-			console.error(msg.error);
 			return;
 		}
 
@@ -337,7 +334,6 @@ function loadConfig(id) {
 			window.control1 = new Control('div1', replay=true);
 			window.control1.initialize(id, msg.config.devices[0]);
 		} else {
-			console.log("hereee");
 			window.control1 = new Control('div1', replay=true);
 			window.control1.initialize(id, msg.config.devices[0], msg.config.devices[1]);
 		}
